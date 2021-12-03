@@ -1,0 +1,62 @@
+version: "3.1"
+
+services:
+  tgbot:
+    container_name: bot
+    build:
+      context: .
+    command: python app.py
+    restart: always
+    depends_on:
+      - redis
+      - db
+    environment:
+      WEBAPP_PORT: 3001
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB_FSM:
+      REDIS_DB_JOBSTORE:
+    ports:
+      - '${WEBAPP_PORT}:3001'
+  redis:
+    ports:
+      - '127.0.0.1:6376:${REDIS_PORT}'
+    image: "redis:alpine"
+    restart: on-failure
+    volumes:
+     - ./data_and_backup/data/redis:/data
+  db:
+    container_name: database
+    image: sameersbn/postgresql:10-2
+    environment:
+      DB_PASS: $DB_PASS
+      DB_USER: $DB_USER
+      DB_NAME: $DB_NAME
+    restart: always
+    volumes:
+      - ./data_and_backup/data/postgresql:/var/lib/postgresql/
+  postgres-backup:
+    build:
+      context: ./services/pg_dump
+    environment:
+      - 'PGUSER=${DB_USER}'
+      - 'PGPASSWORD=${DB_PASS}'
+      - CRON_SCHEDULE=30 2 * * *
+      - DELETE_OLDER_THAN=43200
+      - 'PGDB=${DB_NAME}'
+      - PGHOST=db
+    volumes:
+      - ./data_and_backup/backup/postgresql:/dump
+
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: $PGADMIN_DEFAULT_EMAIL
+      PGADMIN_DEFAULT_PASSWORD: $PGADMIN_DEFAULT_PASSWORD
+      PGADMIN_LISTEN_PORT: $PGPGADMIN_LISTEN_PORT
+    volumes:
+      - ./data_and_backup/pgadmin-data:/root/.pgadmin
+    ports:
+      - "8085:80"
+    restart: unless-stopped
